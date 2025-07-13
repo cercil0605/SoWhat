@@ -66,8 +66,8 @@ async def stop(ctx):
         # 文字起こし
         try:
             await ctx.send("文字起こしを開始します (ローカルWhisperモデルを使用)...")
-            # transcription = await load_voice_to_txt.transcribe_audio_local(bot.filename,model_name="medium")
-            transcription = await load_voice_to_txt.transcribe_audio_local_by_mlx(bot.filename, model_name="mlx-community/whisper-large-v3-mlx")
+            # transcription = await load_voice_to_txt.transcribe_audio_local(bot.filename)
+            transcription = await load_voice_to_txt.transcribe_audio_local_by_mlx(bot.filename)
             transcription_filename_path = bot.filename.replace(".wav", ".txt")
             try:
                 with open(transcription_filename_path, "w", encoding="utf-8") as f:
@@ -75,10 +75,13 @@ async def stop(ctx):
                 print(f"文字起こし結果をローカルに保存しました: {transcription_filename_path}")
                 response =  client.models.generate_content(model="gemini-2.5-flash",contents="以下の会話をマークダウン形式で要約してください．\n"+transcription)
                 summary_text = response.text
-                summary_filename_path = transcription_filename_path.replace(".txt", "_summary.txt")  # ★ ファイル名も変更を推奨 ★
+                summary_filename_path = transcription_filename_path.replace(".txt", "_summary.txt")
                 with open(summary_filename_path, "w", encoding="utf-8") as f:
-                    f.write(summary_text)  # ★ summary_text を書き込む ★
+                    f.write(summary_text)
                 print(f"会話の要約をローカルに保存しました: {summary_filename_path}")
+                # Discordに要約ファイルを送信
+                await ctx.send("要約をMarkdownファイルとして送信します。")
+                await ctx.send(file=discord.File(summary_filename_path))
             except Exception as file_error:
                 print(f"文字起こし結果のファイル保存中にエラーが発生しました: {file_error}")
                 await ctx.send(f"⚠️ 文字起こし結果のファイル保存に失敗しました: {file_error}")
