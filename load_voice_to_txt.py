@@ -1,47 +1,61 @@
 import asyncio
-import whisper
-import mlx_whisper
+from typing import Literal
 
-_local_whisper_model = None # モデルをキャッシュするためのグローバル変数
 
-async def transcribe_audio_local(file_path: str, model_name: str = "base") -> str:
+async def transcribe_audio_local(file_path: str) -> str:
+    return await _transcribe_via_subprocess(file_path, backend="oss-whisper")
+
+
+async def transcribe_audio_local_by_mlx(file_path: str) -> str:
+    return await _transcribe_via_subprocess(file_path, backend="mlx-whisper")
+
+
+async def _transcribe_via_subprocess(
+    file_path: str,
+    backend: Literal["oss-whisper", "mlx-whisper"]
+) -> str:
     """
-    ローカルのWhisperモデルを使用して音声ファイルを文字起こしします。
+    Subprocessで transcribe_worker.py を呼び出し、文字起こしを行う
+
+    Args:
+        file_path: 音声ファイルのパス（.wav）
+        backend: 'oss-whisper' or 'mlx-whisper'
+
+    Returns:
+        文字起こし結果の文字列
+
+    Raises:
+        RuntimeError: subprocessが失敗した場合
     """
-    global _local_whisper_model
-    if _local_whisper_model is None:
-        print(f"Whisperモデル '{model_name}' をロード中...")
-        # モデルのロードはブロッキングなので、asyncio.to_threadで別スレッドで実行
-        _local_whisper_model = await asyncio.to_thread(whisper.load_model, model_name)
-        print(f"Whisperモデル '{model_name}' のロードが完了しました。")
-
-    # デバイスの自動検出（Mac向け）
-    import torch
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = "cuda"
-    elif torch.backends.mps.is_available():
-        device = "mps"
-    print(f"Whisperモデルを {device} デバイスで実行します。")
-
-    # 文字起こしはブロッキングなので、asyncio.to_threadで別スレッドで実行
-    result = await asyncio.to_thread(
-        _local_whisper_model.transcribe,
+    output_txt_path = file_path.replace(".wav", ".txt")
+    command = [
+        "python3",
+        "transcribe_worker.py",
         file_path,
-        language="ja"
+        output_txt_path,
+        backend
+    ]
+
+    print(f"[INFO] Subprocess起動: {' '.join(command)}")
+    proc = await asyncio.create_subprocess_exec(
+        *command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-    return result["text"]
 
-async def transcribe_audio_local_by_mlx(file_path: str,model_name: str = "base") -> str:
-    """
-    mlxを活用した文字起こし
-    """
-    print(f"mlx-whisper({model_name})をロード中...")
-    result = await asyncio.to_thread(
-        mlx_whisper.transcribe,
-        file_path,
-            path_or_hf_repo=model_name,  # "models/large" とハードコードしない
-    )
-    return result["text"]
+    stdout, stderr = await proc.communicate()
 
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"[ERROR] transcribe_worker.py failed with exit code {proc.returncode}\n"
+            f"{stderr.decode(errors='ignore')}"
+        )
 
+    print(f"[DEBUG] stdout:\n{stdout.decode(errors='ignore')}")
+    print(f"[DEBUG] stderr:\n{stderr.decode(errors='ignore')}")
+
+    try:
+        with open(output_txt_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        raise RuntimeError(f"[ERROR] 出力ファイルが見つかりません: {output_txt_path}")
