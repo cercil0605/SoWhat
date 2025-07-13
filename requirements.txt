@@ -3,3 +3,5 @@ soundfile
 numpy
 discord-ext-voice-recv
 dotenv
+openai-whisper
+torch

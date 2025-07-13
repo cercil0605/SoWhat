@@ -1,11 +1,11 @@
 # main.py
 import discord
 import os
-import asyncio
 from discord.ext import commands
 from discord.ext.voice_recv import VoiceRecvClient, WaveSink
 from dotenv import load_dotenv
 import datetime
+import load_voice_to_txt
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -61,6 +61,26 @@ async def stop(ctx):
     if bot.sink and vc:
         vc.stop_listening()
         await ctx.send(f"録音完了: `{bot.filename}` に保存しました")
+        # 文字起こし
+        try:
+            await ctx.send("文字起こしを開始します (ローカルWhisperモデルを使用)...")
+            transcription = await load_voice_to_txt.transcribe_audio_local(bot.filename,model_name="medium")
+            transcription_filename_path = bot.filename.replace(".wav", ".txt")
+            try:
+                with open(transcription_filename_path, "w", encoding="utf-8") as f:
+                    f.write(transcription)
+                print(f"文字起こし結果をローカルに保存しました: {transcription_filename_path}")
+            except Exception as file_error:
+                print(f"文字起こし結果のファイル保存中にエラーが発生しました: {file_error}")
+                await ctx.send(f"⚠️ 文字起こし結果のファイル保存に失敗しました: {file_error}")
+        except ImportError:
+            await ctx.send(
+                "文字起こしライブラリがインストールされていません。`pip install torch torchaudio` を実行してください。")
+            print("ImportError: Whisper or PyTorch not installed.")
+        except Exception as e:
+            await ctx.send(f"文字起こし中にエラーが発生しました: {e}")
+            print(f"文字起こしエラー: {e}")
+
         bot.sink = None
         bot.filename = None
     else:
