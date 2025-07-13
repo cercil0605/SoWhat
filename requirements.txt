@@ -1,0 +1,5 @@
+discord.py
+soundfile
+numpy
+discord-ext-voice-recv
+dotenv
