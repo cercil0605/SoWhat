@@ -6,9 +6,11 @@ from discord.ext.voice_recv import VoiceRecvClient, WaveSink
 from dotenv import load_dotenv
 import datetime
 import load_voice_to_txt
+from google import  genai
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
+client = genai.Client()
 
 intents = discord.Intents.default()
 intents.message_content = True # メッセージコンテンツインテントを有効にする
@@ -70,6 +72,12 @@ async def stop(ctx):
                 with open(transcription_filename_path, "w", encoding="utf-8") as f:
                     f.write(transcription)
                 print(f"文字起こし結果をローカルに保存しました: {transcription_filename_path}")
+                response =  client.models.generate_content(model="gemini-2.5-flash",contents="以下の会話をマークダウン形式で要約してください．\n"+transcription)
+                summary_text = response.text
+                summary_filename_path = transcription_filename_path.replace(".txt", "_summary.txt")  # ★ ファイル名も変更を推奨 ★
+                with open(summary_filename_path, "w", encoding="utf-8") as f:
+                    f.write(summary_text)  # ★ summary_text を書き込む ★
+                print(f"会話の要約をローカルに保存しました: {summary_filename_path}")
             except Exception as file_error:
                 print(f"文字起こし結果のファイル保存中にエラーが発生しました: {file_error}")
                 await ctx.send(f"⚠️ 文字起こし結果のファイル保存に失敗しました: {file_error}")
