@@ -66,7 +66,8 @@ async def stop(ctx):
         # 文字起こし
         try:
             await ctx.send("文字起こしを開始します (ローカルWhisperモデルを使用)...")
-            transcription = await load_voice_to_txt.transcribe_audio_local(bot.filename,model_name="medium")
+            # transcription = await load_voice_to_txt.transcribe_audio_local(bot.filename,model_name="medium")
+            transcription = await load_voice_to_txt.transcribe_audio_local_by_mlx(bot.filename, model_name="mlx-community/whisper-large-v3-mlx")
             transcription_filename_path = bot.filename.replace(".wav", ".txt")
             try:
                 with open(transcription_filename_path, "w", encoding="utf-8") as f:

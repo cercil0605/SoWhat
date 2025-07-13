@@ -1,6 +1,6 @@
-# whisper_transcriber.py
 import asyncio
 import whisper
+import mlx_whisper
 
 _local_whisper_model = None # モデルをキャッシュするためのグローバル変数
 
@@ -31,3 +31,17 @@ async def transcribe_audio_local(file_path: str, model_name: str = "base") -> st
         language="ja"
     )
     return result["text"]
+
+async def transcribe_audio_local_by_mlx(file_path: str,model_name: str = "base") -> str:
+    """
+    mlxを活用した文字起こし
+    """
+    print(f"mlx-whisper({model_name})をロード中...")
+    result = await asyncio.to_thread(
+        mlx_whisper.transcribe,
+        file_path,
+            path_or_hf_repo=model_name,  # "models/large" とハードコードしない
+    )
+    return result["text"]
+
+
