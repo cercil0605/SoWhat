@@ -6,3 +6,5 @@ dotenv
 openai-whisper
 torch
 google-genai
+mlx-whisper
+sounddevice
