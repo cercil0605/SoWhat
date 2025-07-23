@@ -1,101 +1,33 @@
-# main.py
-import discord
-import os
-from discord.ext import commands
-from discord.ext.voice_recv import VoiceRecvClient, WaveSink
-from dotenv import load_dotenv
-import datetime
-import load_voice_to_txt
-from google import  genai
+import discord_mic
+import physical_mic # mic.pyがAudioRecorderクラスを持つようになる
 
-load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN')
-client = genai.Client()
+def main():
+    """
+    メイン関数
+    """
+    while True:
+        choice = input("Discordボットを起動しますか、マイクから録音しますか？ (d/m/exit): ").lower()
+        if choice == 'd':
+            # discord_vc.pyからbotとTOKENを直接インポート
+            discord_mic.bot.run(discord_mic.TOKEN)
+            # bot.run() は通常、プログラムをブロックし続けるので、
+            # ここでbreakすると、ボットが終了した場合にのみプログラム全体が終了します。
+            # ボットが終了した後に再度選択肢に戻るならbreakは不要ですが、
+            # その場合はボット起動中に他の選択肢は選べません。
+            # 現状のコードだと、ボットが終了したらプログラムも終了するフロー
+            print("Discordボットの実行が終了しました。") # ボットが停止した場合のみ表示
+            break # ボットが停止したらメインループを抜ける
 
-intents = discord.Intents.default()
-intents.message_content = True # メッセージコンテンツインテントを有効にする
-bot = commands.Bot(command_prefix="!", intents=intents)
-bot.sink = None
-bot.filename = None
+        elif choice == 'm':
+            # AudioRecorderクラスのインスタンスを作成し、メソッドを呼び出す
+            recorder = physical_mic.AudioRecorder(samplerate=44100, channels=1) # チャンネル数は1で試すことを推奨
+            recorder.record_audio_by_mic()
+            break # 録音が終了したらメインループを抜ける
+        elif choice == 'exit':
+            print("終了します。")
+            break
+        else:
+            print("無効な選択です。'd', 'm', または 'exit' を入力してください。")
 
-
-@bot.command()
-async def join(ctx):
-    if ctx.author.voice:
-        channel = ctx.author.voice.channel
-        await channel.connect(cls=VoiceRecvClient)
-        await ctx.send("VCに接続しました")
-    else:
-        await ctx.send("先にVCに参加してください")
-
-@bot.command()
-async def record(ctx):
-    vc = ctx.voice_client
-    if not isinstance(vc, VoiceRecvClient):
-        await ctx.send("VCに接続していません。`!join` を使ってください")
-        return
-    try:
-        vc.stop_listening()
-        print("Previous listening stopped.")
-    except Exception as e:
-        print(f"Could not stop previous listening (maybe not listening): {e}")
-
-    os.makedirs("recordings", exist_ok=True)
-    now = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    os.makedirs("recordings", exist_ok=True)
-    bot.filename = f"recordings/record_{now}.wav"
-    bot.sink = WaveSink(bot.filename)
-    vc.listen(bot.sink)
-
-    await ctx.send(f"録音中... `!stop` で終了してください")
-
-@bot.command()
-async def leave(ctx):
-    if ctx.voice_client:
-        await ctx.voice_client.disconnect()
-        await ctx.send("VCから切断しました")
-    else:
-        await ctx.send("VCに接続していません")
-
-@bot.command()
-async def stop(ctx):
-    vc = ctx.voice_client
-    if bot.sink and vc:
-        vc.stop_listening()
-        await ctx.send(f"録音完了: `{bot.filename}` に保存しました")
-        # 文字起こし
-        try:
-            await ctx.send("文字起こしを開始します (ローカルWhisperモデルを使用)...")
-            # transcription = await load_voice_to_txt.transcribe_audio_local(bot.filename)
-            transcription = await load_voice_to_txt.transcribe_audio_local_by_mlx(bot.filename)
-            transcription_filename_path = bot.filename.replace(".wav", ".txt")
-            try:
-                with open(transcription_filename_path, "w", encoding="utf-8") as f:
-                    f.write(transcription)
-                print(f"文字起こし結果をローカルに保存しました: {transcription_filename_path}")
-                response =  client.models.generate_content(model="gemini-2.5-flash",contents="以下の会話をマークダウン形式で要約してください．\n"+transcription)
-                summary_text = response.text
-                summary_filename_path = transcription_filename_path.replace(".txt", "_summary.txt")
-                with open(summary_filename_path, "w", encoding="utf-8") as f:
-                    f.write(summary_text)
-                print(f"会話の要約をローカルに保存しました: {summary_filename_path}")
-                # Discordに要約ファイルを送信
-                await ctx.send("要約をMarkdownファイルとして送信します。")
-                await ctx.send(file=discord.File(summary_filename_path))
-            except Exception as file_error:
-                print(f"文字起こし結果のファイル保存中にエラーが発生しました: {file_error}")
-                await ctx.send(f"⚠️ 文字起こし結果のファイル保存に失敗しました: {file_error}")
-        except ImportError:
-            await ctx.send(
-                "文字起こしライブラリがインストールされていません。`pip install torch torchaudio` を実行してください。")
-            print("ImportError: Whisper or PyTorch not installed.")
-        except Exception as e:
-            await ctx.send(f"文字起こし中にエラーが発生しました: {e}")
-            print(f"文字起こしエラー: {e}")
-
-        bot.sink = None
-        bot.filename = None
-    else:
-        await ctx.send("録音していません")
-
-bot.run(TOKEN)
+if __name__ == "__main__":
+    main()
